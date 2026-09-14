@@ -1,0 +1,18 @@
+# Portable environment for FrazerFilter_FitHiC.
+#
+# The filter is pure pandas/numpy over a fithic significances table, so the
+# dependency list is short and nothing here is version-sensitive: no C-extension
+# ABI pins are needed, and numpy 2 is fine.
+#
+#     bash 0.0_create_frazerTB_env.sh
+#
+# For the exact build-pinned env from the LJI cluster see frazerTB_env.lock.yml
+# (linux-64 only; not shipped in this repo).
+name: frazerTB
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.10
+  - pandas
+  - numpy
+  - pip

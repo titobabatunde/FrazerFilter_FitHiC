@@ -7,27 +7,78 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=150g
 
-# Script to generate SLURM scripts for filtering fithic replicates using Frazer replicate approach
-# Creates example scripts in qshs directory
+# Writes one SLURM job script per replicate per chromosome for the Frazer
+# neighbour filter. This script generates jobs; it does not filter anything.
+#
+# ---------------------------------------------------------------------------
+# HOW TO RUN   (run it from inside the repo -- workingDir defaults to $PWD)
+#
+#   sbatch 1.1_filter_fithic_replicates_frazer.sh
+#   bash   1.1_filter_fithic_replicates_frazer.sh
+#
+# bash is fine for THIS script: it only writes job scripts and takes seconds.
+# It is NOT fine for the jobs it generates -- those are per-chromosome filter
+# runs and must be submitted with sbatch.
+#
+# Override any INPUT VARIABLE below on the command line:
+#
+#   CELL_TYPES="condA condB" INPUT_DIR=/path/to/matrix \
+#     bash 1.1_filter_fithic_replicates_frazer.sh
+#
+#   sbatch --export=ALL,CELL_TYPES="condA condB",INPUT_DIR=/path/to/matrix \
+#     1.1_filter_fithic_replicates_frazer.sh
+# ---------------------------------------------------------------------------
 
 source ~/.bashrc
 
-# Parameters
-curr_date=$(date +"%y%m%d")
-resolution=10000
-fdr=0.0005
+# ===========================================================================
+# INPUT VARIABLES
+# ===========================================================================
 
-# Directories
-baseDir="/mnt/BioAdHoc/Groups/vd-ay/bbabatunde/projects/25-06-Kuchroo-Ay"
-workingDir="/home/bbabatunde/packages/25-11-frazer/Frazer_TB"
-inputDir="${baseDir}/yard/250818_HiCPro/results/hicpro/hic_results/matrix"
+# Cell types / conditions to process.
+read -r -a cellTypes <<< "${CELL_TYPES:-npTh17 pTh17-1 Th0 Th1 Th2 Treg}"
+
+# Replicates to skip, by exact name. Space-separated; empty to skip none.
+# Was a hardcoded `Th2-2` exclusion; it is data-specific, so it lives here.
+read -r -a skipReplicates <<< "${SKIP_REPLICATES:-Th2-2}"
+
+# Chromosomes to write jobs for. Mouse autosomes by default; use chr1..chr22
+# for human, and add chrX / chrY if you want them.
+read -r -a chroms <<< "${CHROMS:-chr1 chr2 chr3 chr4 chr5 chr6 chr7 chr8 chr9 chr10 chr11 chr12 chr13 chr14 chr15 chr16 chr17 chr18 chr19}"
+
+# Directory holding per-replicate fithic output. Expected layout:
+#   ${inputDir}/<replicate>/fithic/<resolution>/<replicate>.<fithicTemplate>
+inputDir="${INPUT_DIR:-/mnt/BioAdHoc/Groups/vd-ay/bbabatunde/projects/25-06-Kuchroo-Ay/yard/250818_HiCPro/results/hicpro/hic_results/matrix}"
+
+# Filename of the fithic call table, after the leading "<replicate>.".
+fithicTemplate="${FITHIC_TEMPLATE:-L20000.U3000000.p2.b200.spline_pass2.res${RESOLUTION:-10000}.significances.txt}"
+
+# Where filtered output goes.
+resultsRoot="${RESULTS_DIR:-$(pwd)/results}"
+
+# This repo, holding the .py file. Defaults to the directory you run from.
+workingDir="${WORKING_DIR:-$(pwd)}"
+
+# Conda/mamba environment the generated jobs activate. Built by
+# 0.0_create_frazerTB_env.sh.
+envName="${ENV_NAME:-frazerTB}"
+
+resolution="${RESOLUTION:-10000}"
+fdr="${FDR_THRESHOLD:-0.0005}"
+
+# Frazer filter parameters: an interaction is kept only if BOTH anchors have at
+# least minNeighbors significant partners among the totalNeighbors bins
+# flanking the opposing anchor.
+minNeighbors="${MIN_NEIGHBORS:-3}"
+totalNeighbors="${TOTAL_NEIGHBORS:-5}"
+
+# ===========================================================================
+# Derived - no need to edit below here
+# ===========================================================================
+curr_date=$(date +"%y%m%d")
 pythonFile="${workingDir}/1.1_filter_fithic_replicate_frazer.py"
 scriptsDir="${workingDir}/qshs/${curr_date}_filter_fithic_frazer_replicate_fdr${fdr}"
-outputDir="${baseDir}/results/fithic_frazer_replicate_fdr${fdr}"
-
-# Cell types to process
-cellTypes=("npTh17" "pTh17-1" "Th0" "Th1" "Th2" "Treg")
-# cellTypes=("Th2")
+outputDir="${resultsRoot}/fithic_frazer_replicate_fdr${fdr}"
 
 mkdir -p ${scriptsDir}
 mkdir -p ${outputDir}
@@ -35,86 +86,96 @@ mkdir -p ${outputDir}
 # Check if Python script exists
 if [ ! -f "${pythonFile}" ]; then
     echo "Error: Python script not found: ${pythonFile}"
+    echo "  Run this from inside the repo, or set WORKING_DIR=."
+    exit 1
+fi
+
+if [ ! -d "${inputDir}" ]; then
+    echo "Error: fithic input directory not found: ${inputDir}"
+    echo "  Set INPUT_DIR= to where your per-replicate fithic output lives."
     exit 1
 fi
 
 echo "=================================================="
 echo "Generating Frazer replicate filtering scripts"
 echo "=================================================="
+echo "Input directory:   ${inputDir}"
 echo "Scripts directory: ${scriptsDir}"
-echo "Output directory: ${outputDir}"
+echo "Output directory:  ${outputDir}"
+echo "Filter:            >=${minNeighbors} of ${totalNeighbors} neighbours, both anchors, FDR<${fdr}"
 echo ""
 
 for cellType in ${cellTypes[@]}; do
     echo "Processing: ${cellType}"
-    
-    # Collect replicate names and fithic files
+
     fithicFiles=()
     replicateNames=()
-    
+
     while IFS= read -r folder; do
         replicate=$(basename ${folder})
-        
-        # Skip Th2-2 if present
-        if [[ "${replicate}" == "Th2-2" ]]; then
-            continue
-        fi
-        
-        # Construct fithic file path
-        fithicFolder="${folder}/fithic/${resolution}"
-        fithicFile="${fithicFolder}/${replicate}.L20000.U3000000.p2.b200.spline_pass2.res${resolution}.significances.txt"
-        
-        # Check if file exists
+
+        # Skip any replicate named in SKIP_REPLICATES
+        skip=0
+        for s in ${skipReplicates[@]}; do
+            [[ "${replicate}" == "${s}" ]] && { skip=1; break; }
+        done
+        [ "${skip}" -eq 1 ] && { echo "  Skipping ${replicate} (in SKIP_REPLICATES)"; continue; }
+
+        fithicFile="${folder}/fithic/${resolution}/${replicate}.${fithicTemplate}"
+
         if [ ! -f "${fithicFile}" ]; then
-            echo "  Warning: Fithic file not found: ${fithicFile}"
-            continue
+            if [ -f "${fithicFile}.gz" ]; then
+                fithicFile="${fithicFile}.gz"
+            else
+                echo "  Warning: Fithic file not found: ${fithicFile}[.gz]"
+                continue
+            fi
         fi
-        
+
         fithicFiles+=("${fithicFile}")
         replicateNames+=("${replicate}")
-        
-        if [ -n "${verbose}" ]; then
-            echo "  Found replicate: ${replicate}"
-        fi
     done < <(find ${inputDir} -maxdepth 1 -type d -name "${cellType}*" | sort)
-    
+
     if [ ${#fithicFiles[@]} -eq 0 ]; then
         echo "  Warning: No fithic files found for ${cellType}, skipping..."
         continue
     fi
-    
+
     echo "  Found ${#fithicFiles[@]} replicates"
-    
-    # Create output directory for this cell type
-    cellTypeOutputDir="${outputDir}/${cellType}-frazer-chrs"
-    
-    # Create scripts for each replicate and chromosome combination
+
+    # The python appends "/frazer-chrs" itself, so pass only the cell type here.
+    # Upstream passed "${cellType}-frazer-chrs", producing a doubled
+    # <cellType>-frazer-chrs/frazer-chrs/ path.
+    cellTypeOutputDir="${outputDir}/${cellType}"
+
     for i in "${!fithicFiles[@]}"; do
         fithicFile="${fithicFiles[$i]}"
         replicateName="${replicateNames[$i]}"
-        
-        for chrom in {1..19}; do
-            scriptFile="${scriptsDir}/filter_frazer_${cellType}_${replicateName}_chr${chrom}.sh"
-            
+
+        for chrom in ${chroms[@]}; do
+            scriptFile="${scriptsDir}/filter_frazer_${cellType}_${replicateName}_${chrom}.sh"
+
             cat <<EOF > ${scriptFile}
 #!/bin/bash
-#SBATCH --job-name=frazer-${cellType}-${replicateName}-chr${chrom}-fdr${fdr}
-#SBATCH --output=${scriptsDir}/frazer-${cellType}-${replicateName}-chr${chrom}-fdr${fdr}_%j.out
+#SBATCH --job-name=frazer-${cellType}-${replicateName}-${chrom}-fdr${fdr}
+#SBATCH --output=${scriptsDir}/frazer-${cellType}-${replicateName}-${chrom}-fdr${fdr}_%j.out
 #SBATCH --time=100:00:00
 #SBATCH --cpus-per-task=12
 #SBATCH --nodes=1
 #SBATCH --mem=250g
 
 source ~/.bashrc
-mamba activate your_environment
+mamba activate ${envName}
 cd ${workingDir}
 
 python3 ${pythonFile} \\
     --input_file ${fithicFile} \\
     --replicate_name ${replicateName} \\
-    --chromosome chr${chrom} \\
+    --chromosome ${chrom} \\
     --fdr_threshold ${fdr} \\
     --resolution ${resolution} \\
+    --min_neighbors ${minNeighbors} \\
+    --total_neighbors ${totalNeighbors} \\
     --output_dir ${cellTypeOutputDir} \\
     --verbose
 
@@ -122,8 +183,8 @@ EOF
             chmod +x ${scriptFile}
         done
     done
-    
-    echo "  ✓ Created scripts for ${#fithicFiles[@]} replicates × 19 chromosomes = $(( ${#fithicFiles[@]} * 19 )) scripts"
+
+    echo "  ✓ Created ${#fithicFiles[@]} replicates x ${#chroms[@]} chromosomes = $(( ${#fithicFiles[@]} * ${#chroms[@]} )) scripts"
     echo ""
 done
 
@@ -132,4 +193,3 @@ echo "Generated scripts in: ${scriptsDir}"
 echo "Submit jobs using:"
 echo "  sbatch ${scriptsDir}/filter_frazer_*.sh"
 echo "=================================================="
-

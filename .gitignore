@@ -1,0 +1,54 @@
+# --- Generated SLURM job scripts -------------------------------------------
+# 1.1_filter_fithic_replicates_frazer.sh writes one job script per replicate
+# per chromosome under qshs/<date>_.../ . Derived, never source.
+qshs/
+
+# --- SLURM / job logs -------------------------------------------------------
+*.out
+*.err
+slurm-*.out
+
+# --- Filter output ----------------------------------------------------------
+results/
+*-frazer-chrs/
+*.frazer.fdr*.txt
+*.frazer.fdr*.bedpe
+
+# --- Hi-C / loop data -------------------------------------------------------
+# Never commit contact matrices or loop calls; they are GB-scale.
+significances.txt*
+*.significances.txt
+*.significances.txt.gz
+*.bedpe
+*.cool
+*.mcool
+*.hic
+*.matrix
+
+# --- Conda / mamba ----------------------------------------------------------
+envs/
+.conda/
+*_explicit.txt
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# --- Site-local, deliberately not published ---------------------------------
+# Only meaningful with access to the original LJI cluster:
+#   README.local.md        maintainer notes, provenance, cluster paths
+#   frazerTB_env.lock.yml  exact linux-64 build-pinned export of the env
+# Users of this repo build from frazerTB_env.yml, the only spec it ships.
+README.local.md
+*.lock.yml
+
+# --- Editors / OS -----------------------------------------------------------
+.DS_Store
+._*
+.vscode/
+.idea/
+*.swp
+*~
