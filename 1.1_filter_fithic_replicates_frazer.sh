@@ -38,9 +38,9 @@ source ~/.bashrc
 # Cell types / conditions to process.
 read -r -a cellTypes <<< "${CELL_TYPES:-npTh17 pTh17-1 Th0 Th1 Th2 Treg}"
 
-# Replicates to skip, by exact name. Space-separated; empty to skip none.
-# Was a hardcoded `Th2-2` exclusion; it is data-specific, so it lives here.
-read -r -a skipReplicates <<< "${SKIP_REPLICATES:-Th2-2}"
+# Replicates to skip, by exact name. Space-separated; empty (the default) skips
+# none. Set it per run rather than editing this file.
+read -r -a skipReplicates <<< "${SKIP_REPLICATES:-}"
 
 # Chromosomes to write jobs for. Mouse autosomes by default; use chr1..chr22
 # for human, and add chrX / chrY if you want them.
@@ -64,7 +64,7 @@ workingDir="${WORKING_DIR:-$(pwd)}"
 envName="${ENV_NAME:-frazerTB}"
 
 resolution="${RESOLUTION:-10000}"
-fdr="${FDR_THRESHOLD:-0.0005}"
+fdr="${FDR_THRESHOLD:-0.0001}"
 
 # Frazer filter parameters: an interaction is kept only if BOTH anchors have at
 # least minNeighbors significant partners among the totalNeighbors bins

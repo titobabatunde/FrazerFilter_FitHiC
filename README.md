@@ -27,6 +27,7 @@ Please cite the paper above if you use this.
 2. Keep only interactions whose anchors have enough significant neighbours
    (the Frazer filter, below)
 3. Write the survivors in both fithic and BEDPE format, the latter for APAs
+4. Concatenate the per-chromosome output into one genome-wide file per replicate
 
 ## Files
 
@@ -34,6 +35,7 @@ Please cite the paper above if you use this.
 - **`frazerTB_env.yml`** - Conda/mamba environment spec
 - **`1.1_filter_fithic_replicate_frazer.py`** - The filter, one replicate and chromosome per invocation
 - **`1.1_filter_fithic_replicates_frazer.sh`** - Generates SLURM jobs per replicate per chromosome
+- **`1.2_concat_frazer_chrs.sh`** - Concatenates the per-chromosome output into one file per replicate
 
 ## Setup
 
@@ -68,7 +70,9 @@ For an interaction A ↔ B to pass, with defaults `min_neighbors=3` of
 
 ## Workflow
 
-### Generate SLURM Scripts
+### Step 1: Filter Each Replicate
+
+#### Generate SLURM Scripts
 
 ```bash
 bash 1.1_filter_fithic_replicates_frazer.sh
@@ -97,23 +101,23 @@ required ones must be changed for your own data.
 
 **Optional:**
 - `CHROMS`: Space-separated chromosomes to write jobs for (default: `chr1` through `chr19`)
-- `SKIP_REPLICATES`: Replicate names to exclude (default: `Th2-2`; set to empty to skip none)
+- `SKIP_REPLICATES`: Replicate names to exclude (default: none)
 - `FITHIC_TEMPLATE`: Fithic filename after the leading `{replicate}.` (default: `L20000.U3000000.p2.b200.spline_pass2.res{resolution}.significances.txt`)
 - `RESULTS_DIR`: Output root (default: `$PWD/results`)
 - `ENV_NAME`: Environment the generated jobs activate (default: `frazerTB`)
 - `RESOLUTION`: Resolution in base pairs (default: 10000)
-- `FDR_THRESHOLD`: FDR threshold for significance (default: 0.0005)
+- `FDR_THRESHOLD`: q-value threshold for significance (default: 0.0001)
 - `MIN_NEIGHBORS` / `TOTAL_NEIGHBORS`: Filter stringency (default: 3 of 5)
 - `WORKING_DIR`: Directory containing the `.py` file (default: `$PWD`)
 
-### Run the Python Script Directly
+#### Run the Python Script Directly
 
 ```bash
 python3 1.1_filter_fithic_replicate_frazer.py \
     --input_file rep1.significances.txt \
     --replicate_name rep1 \
     --chromosome chr1 \
-    --fdr_threshold 0.0005 \
+    --fdr_threshold 0.0001 \
     --resolution 10000 \
     --output_dir /path/to/output \
     --verbose
@@ -129,13 +133,49 @@ python3 1.1_filter_fithic_replicate_frazer.py \
 
 **Optional:**
 - `--chromosome`: Chromosome to process (default: `chr1`)
-- `--fdr_threshold`: FDR threshold for significance (default: 0.0001)
+- `--fdr_threshold`: q-value threshold for significance (default: 0.0001)
 - `--min_neighbors`: Minimum number of significant neighbours required (default: 3)
 - `--total_neighbors`: Total number of neighbours to check (default: 5)
 - `--verbose`: Enable verbose output
 
-Note the two FDR defaults differ: the Python defaults to `0.0001`, the generator
-passes `0.0005`. The generator's value wins for SLURM runs.
+### Step 2: Concatenate Across Chromosomes
+
+Step 1 writes one file per replicate per chromosome. Step 2 joins them into a
+single genome-wide file per replicate, in both formats.
+
+```bash
+bash 1.2_concat_frazer_chrs.sh
+```
+
+Unlike step 1 this does the work itself rather than generating jobs.
+
+| | |
+|---|---|
+| Input | `<results>/fithic_frazer_replicate_fdr<fdr>/{condition}/frazer-chrs/{replicate}.{chrom}.frazer.fdr<fdr>.{txt,bedpe}` |
+| Output | `<results>/fithic_frazer_replicate_fdr<fdr>/{condition}/{replicate}.frazer.fdr<fdr>.{txt,bedpe}` |
+
+Replicates are discovered from what step 1 actually produced rather than by
+rescanning the fithic input, so a partial run concatenates what exists and
+reports what is missing. Check the `N chromosomes, M missing` line before using
+the result.
+
+An existing output file is left alone; pass `FORCE=1` to rebuild it.
+
+**BEDPE loop ids are renumbered.** Step 1 names loops `loop_0`…`loop_N` within
+each chromosome, so a naive concatenation would repeat ids. Step 2 renumbers the
+`name` column genome-wide.
+
+#### Arguments
+
+**Required:** none beyond matching what step 1 was run on.
+
+**Optional:**
+- `CELL_TYPES`: Conditions to concatenate (default: the same list as step 1)
+- `CHROMS`: Chromosomes, in output order (default: `chr1` through `chr19`)
+- `RESULTS_DIR`: Output root; must match what step 1 used (default: `$PWD/results`)
+- `FDR_THRESHOLD`: Must match step 1, since it is part of the filenames (default: 0.0001)
+- `FORCE`: Overwrite existing concatenated files (default: 0)
+- `WORKING_DIR`: This repo (default: `$PWD`)
 
 ## Running the scripts
 
@@ -170,6 +210,11 @@ With the generator, `{output_dir}` is
 `{RESULTS_DIR}/fithic_frazer_replicate_fdr{fdr}/{cellType}`, so the files land in
 `…/{cellType}/frazer-chrs/`.
 
+After step 2, the genome-wide files sit one level up, alongside `frazer-chrs/`:
+
+- `…/{cellType}/{replicate_name}.frazer.fdr{fdr}.txt`
+- `…/{cellType}/{replicate_name}.frazer.fdr{fdr}.bedpe`
+
 ## Example Workflow
 
 `{condition}` below is one entry of `CELL_TYPES`, `{replicate}` one of its
@@ -184,8 +229,16 @@ mamba activate frazerTB
 bash 1.1_filter_fithic_replicates_frazer.sh
 
 # 3. Submit jobs
-cd qshs/{date}_filter_fithic_frazer_replicate_fdr0.0005/
+cd qshs/{date}_filter_fithic_frazer_replicate_fdr0.0001/
 sbatch filter_frazer_{condition}_{replicate}_chr1.sh
 sbatch filter_frazer_{condition}_{replicate}_chr2.sh
 # ... etc, one per replicate x chromosome
+# Wait for all of them to finish...
+
+# 4. Concatenate the per-chromosome output
+cd -
+bash 1.2_concat_frazer_chrs.sh
 ```
+
+Step 2 must not start until every chromosome job has finished. It will happily
+concatenate a partial set and only warn about what is missing.
