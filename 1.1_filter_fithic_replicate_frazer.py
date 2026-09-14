@@ -40,6 +40,14 @@ def parse_arguments():
                        type=int,
                        default=5,
                        help='Total number of neighbors to check (default: 5, excluding anchor)')
+    parser.add_argument('--min_distance',
+                       type=int,
+                       default=32000,
+                       help='Minimum distance in bp between the two anchors; shorter-range '
+                            'interactions are dropped before filtering (default: 32000). '
+                            'Note this is stricter than Greenwald et al. 2019, which only '
+                            'removes contacts <2 kb apart as self-ligation artefacts.')
+
     parser.add_argument('--resolution', 
                        type=int,
                        required=True,
@@ -54,7 +62,7 @@ def parse_arguments():
                        help='Print verbose output')
     return parser.parse_args()
 
-def load_and_sort_fithic_data(file_path, fdr_threshold, chromosome, verbose=False):
+def load_and_sort_fithic_data(file_path, fdr_threshold, chromosome, min_distance=32000, verbose=False):
     """
     Load and filter fithic data by FDR threshold and distance.
     
@@ -62,11 +70,12 @@ def load_and_sort_fithic_data(file_path, fdr_threshold, chromosome, verbose=Fals
         file_path: Path to fithic significance file (.txt or .txt.gz)
         fdr_threshold: FDR threshold for significance filtering
         chromosome: Chromosome to filter for (e.g., 'chr1')
+        min_distance: Minimum bp between anchors; closer interactions are dropped
         verbose: Whether to print verbose output
     
     Returns:
         df: Full dataframe sorted by coordinates
-        significant_df: Filtered dataframe with significant interactions (FDR < threshold, distance >= 32000 bp)
+        significant_df: Filtered dataframe with significant interactions (FDR < threshold, distance >= min_distance)
     """
     if verbose:
         print(f"Loading: {file_path}")
@@ -93,11 +102,13 @@ def load_and_sort_fithic_data(file_path, fdr_threshold, chromosome, verbose=Fals
     if verbose:
         print(f"  After FDR filtering: {len(significant_df)} interactions")
     
-    # Filter out interactions with absolute distance between anchors less than 32000 bp
+    # Filter out interactions whose anchors are closer than min_distance
     # This removes very short-range interactions that are likely technical artifacts
-    significant_df = significant_df[abs(significant_df['fragmentMid1'] - significant_df['fragmentMid2']) >= 32000]
-    if verbose:
-        print(f"  After distance filtering (>= 32000 bp): {len(significant_df)} interactions")
+    if min_distance > 0:
+        significant_df = significant_df[
+            abs(significant_df['fragmentMid1'] - significant_df['fragmentMid2']) >= min_distance]
+        if verbose:
+            print(f"  After distance filtering (>= {min_distance} bp): {len(significant_df)} interactions")
     
     return df.copy(), significant_df.copy()
 # end def
@@ -278,6 +289,7 @@ def main():
         print(f"Chromosome: {args.chromosome}")
         print(f"FDR threshold: {args.fdr_threshold}")
         print(f"Resolution: {args.resolution}")
+        print(f"Min anchor distance: {args.min_distance}")
         print(f"Min neighbors: {args.min_neighbors}")
         print(f"Total neighbors: {args.total_neighbors}")
         print()
@@ -302,7 +314,7 @@ def main():
     fithic_df_significant = {}
     extension = f'{args.chromosome}.frazer.fdr{args.fdr_threshold}.txt'
     fithic_df, fithic_df_significant = load_and_sort_fithic_data(
-        args.input_file, args.fdr_threshold, args.chromosome, args.verbose)
+        args.input_file, args.fdr_threshold, args.chromosome, args.min_distance, args.verbose)
 
     # Step 2: Filter by neighbor significance (Frazer filtering)
     if args.verbose:

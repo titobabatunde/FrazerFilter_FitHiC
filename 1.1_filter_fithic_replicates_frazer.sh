@@ -69,6 +69,11 @@ fdr="${FDR_THRESHOLD:-0.01}"
 minNeighbors="${MIN_NEIGHBORS:-3}"
 totalNeighbors="${TOTAL_NEIGHBORS:-5}"
 
+# Minimum bp between the two anchors; closer interactions are dropped before
+# filtering. Stricter than the paper, which only removes contacts <2 kb apart as
+# self-ligation artefacts. Set to 0 to disable.
+minDistance="${MIN_DISTANCE:-32000}"
+
 # ===========================================================================
 # Derived - no need to edit below here
 # ===========================================================================
@@ -99,7 +104,7 @@ echo "=================================================="
 echo "Input directory:   ${inputDir}"
 echo "Scripts directory: ${scriptsDir}"
 echo "Output directory:  ${outputDir}"
-echo "Filter:            >=${minNeighbors} of ${totalNeighbors} neighbours, both anchors, FDR<${fdr}"
+echo "Filter:            >=${minNeighbors} of ${totalNeighbors} neighbours, both anchors, FDR<${fdr}, anchors >=${minDistance} bp apart"
 echo ""
 
 for cellType in ${cellTypes[@]}; do
@@ -173,6 +178,7 @@ python3 ${pythonFile} \\
     --resolution ${resolution} \\
     --min_neighbors ${minNeighbors} \\
     --total_neighbors ${totalNeighbors} \\
+    --min_distance ${minDistance} \\
     --output_dir ${cellTypeOutputDir} \\
     --verbose
 

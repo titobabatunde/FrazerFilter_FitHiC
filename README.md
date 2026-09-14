@@ -65,13 +65,12 @@ For an interaction A ↔ B to pass, with defaults `min_neighbors=3` of
 wording: three on *one* side is enough, and each side is checked separately, so
 `total_neighbors` is the count per direction.
 
-Two filters are applied before this one, inside
-`load_and_sort_fithic_data`:
+Two filters are applied before this one, inside `load_and_sort_fithic_data`:
 
 - `q-value < fdr_threshold`
-- **anchors at least 32,000 bp apart** - hardcoded, not currently a parameter.
-  It removes very short-range interactions; be aware it is stricter than the
-  2 kb self-ligation cutoff used in the paper.
+- **anchors at least `min_distance` bp apart**, default 32,000. This removes
+  very short-range interactions; note it is stricter than the 2 kb
+  self-ligation cutoff used in the paper. Set it to `0` to disable.
 
 ## Workflow
 
@@ -112,7 +111,8 @@ required ones must be changed for your own data.
 - `ENV_NAME`: Environment the generated jobs activate (default: `frazerTB`)
 - `RESOLUTION`: Resolution in base pairs (default: 10000)
 - `FDR_THRESHOLD`: q-value threshold for significance (default: 0.01, the paper's value)
-- `MIN_NEIGHBORS` / `TOTAL_NEIGHBORS`: Filter stringency (default: 3 of 5)
+- `MIN_NEIGHBORS` / `TOTAL_NEIGHBORS`: Filter stringency (default: 3 of 5, per direction)
+- `MIN_DISTANCE`: Minimum bp between anchors (default: 32000; `0` disables)
 - `WORKING_DIR`: Directory containing the `.py` file (default: `$PWD`)
 
 #### Run the Python Script Directly
@@ -140,7 +140,8 @@ python3 1.1_filter_fithic_replicate_frazer.py \
 - `--chromosome`: Chromosome to process (default: `chr1`)
 - `--fdr_threshold`: q-value threshold for significance (default: 0.01, the paper's value)
 - `--min_neighbors`: Minimum number of significant neighbours required (default: 3)
-- `--total_neighbors`: Total number of neighbours to check (default: 5)
+- `--total_neighbors`: Neighbouring bins to check per direction (default: 5)
+- `--min_distance`: Minimum bp between the two anchors (default: 32000; `0` disables)
 - `--verbose`: Enable verbose output
 
 ### Step 2: Concatenate Across Chromosomes
