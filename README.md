@@ -245,6 +245,3 @@ sbatch filter_frazer_{condition}_{replicate}_chr2.sh
 cd -
 bash 1.2_concat_frazer_chrs.sh
 ```
-
-Step 2 must not start until every chromosome job has finished. It will happily
-concatenate a partial set and only warn about what is missing.
