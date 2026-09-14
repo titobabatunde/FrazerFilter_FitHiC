@@ -1,13 +1,8 @@
 # FrazerFilter_FitHiC - Neighbour-Support Filtering of Fit-Hi-C Loops
 
-This package filters Fit-Hi-C loop calls by FDR and by neighbour significance: a
-loop is kept only if both of its anchors are corroborated by significant
-interactions with the bins flanking the opposing anchor. The effect is to drop
-isolated single-pixel calls and keep loops whose signal is supported by their
-local neighbourhood.
+This package filters Fit-Hi-C loop calls by FDR and by neighbour significance: a loop is kept only if both of its anchors are corroborated by significant interactions with the bins flanking the opposing anchor. The effect is to drop isolated single-pixel calls and keep loops whose signal is supported by their local neighbourhood.
 
-Each replicate is filtered independently - there are no cross-replicate
-comparisons and no union files.
+Each replicate is filtered independently 
 
 ## Origin and Citation
 
@@ -15,9 +10,7 @@ The filtering criterion is taken from the methods of:
 
 > W. W. Greenwald, N. Li, P. Benaglio, D. Jakubosky, H. Matsui, A. Schmitt, S. Selvaraj, M. D'Antonio, A. D'Antonio-Chronowska, E. N. Smith, K. A. Frazer, Subtle changes in chromatin loop contact propensity are associated with differential gene regulation and expression. *Nat. Commun.* **10**, 1054 (2019). doi: [10.1038/s41467-019-08940-5](https://doi.org/10.1038/s41467-019-08940-5)
 
-That study quantifies chromatin loop *contact propensity*; this repo implements
-only the loop-filtering step from it, applied to **fithic** output. It does not
-compute contact propensity.
+That study quantifies chromatin loop *contact propensity*; this repo implements only the loop-filtering step from it, applied to **fithic** output. It does not compute contact propensity.
 
 Please cite the paper above if you use this.
 
@@ -68,6 +61,18 @@ For an interaction A ↔ B to pass, with defaults `min_neighbors=3` of
    flanking A: A-1 ↔ B, A-2 ↔ B, … A+1 ↔ B, A+2 ↔ B, …
 3. **Both must pass.** Either anchor failing drops the interaction.
 
+"Three of the five immediately upstream or downstream bins" is the paper's
+wording: three on *one* side is enough, and each side is checked separately, so
+`total_neighbors` is the count per direction.
+
+Two filters are applied before this one, inside
+`load_and_sort_fithic_data`:
+
+- `q-value < fdr_threshold`
+- **anchors at least 32,000 bp apart** - hardcoded, not currently a parameter.
+  It removes very short-range interactions; be aware it is stricter than the
+  2 kb self-ligation cutoff used in the paper.
+
 ## Workflow
 
 ### Step 1: Filter Each Replicate
@@ -100,7 +105,7 @@ required ones must be changed for your own data.
 - `INPUT_DIR`: Directory of per-replicate fithic output, as `<dir>/{replicate}/fithic/{resolution}/{replicate}.{FITHIC_TEMPLATE}`
 
 **Optional:**
-- `CHROMS`: Space-separated chromosomes to write jobs for (default: `chr1` through `chr19`)
+- `CHROMS`: Space-separated chromosomes to write jobs for (default: `chr1` through `chr19`). Assumes mouse genome.
 - `SKIP_REPLICATES`: Replicate names to exclude (default: none)
 - `FITHIC_TEMPLATE`: Fithic filename after the leading `{replicate}.` (default: `L20000.U3000000.p2.b200.spline_pass2.res{resolution}.significances.txt`)
 - `RESULTS_DIR`: Output root (default: `$PWD/results`)

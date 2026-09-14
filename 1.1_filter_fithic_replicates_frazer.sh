@@ -1,5 +1,4 @@
 #!/bin/bash
-
 #SBATCH --job-name=filter_fithic_frazer_replicate
 #SBATCH --output=1.1_filter_fithic_frazer_replicate_%j.out
 #SBATCH --time=24:00:00
@@ -11,7 +10,7 @@
 # neighbour filter. This script generates jobs; it does not filter anything.
 #
 # ---------------------------------------------------------------------------
-# HOW TO RUN   (run it from inside the repo -- workingDir defaults to $PWD)
+# HOW TO RUN   (workingDir defaults to $PWD)
 #
 #   sbatch 1.1_filter_fithic_replicates_frazer.sh
 #   bash   1.1_filter_fithic_replicates_frazer.sh
@@ -38,16 +37,14 @@ source ~/.bashrc
 # Cell types / conditions to process.
 read -r -a cellTypes <<< "${CELL_TYPES:-npTh17 pTh17-1 Th0 Th1 Th2 Treg}"
 
-# Replicates to skip, by exact name. Space-separated; empty (the default) skips
-# none. Set it per run rather than editing this file.
+# Replicates to skip, by exact name. 
 read -r -a skipReplicates <<< "${SKIP_REPLICATES:-}"
 
 # Chromosomes to write jobs for. Mouse autosomes by default; use chr1..chr22
 # for human, and add chrX / chrY if you want them.
 read -r -a chroms <<< "${CHROMS:-chr1 chr2 chr3 chr4 chr5 chr6 chr7 chr8 chr9 chr10 chr11 chr12 chr13 chr14 chr15 chr16 chr17 chr18 chr19}"
 
-# Directory holding per-replicate fithic output. Expected layout:
-#   ${inputDir}/<replicate>/fithic/<resolution>/<replicate>.<fithicTemplate>
+# Directory holding per-replicate fithic output.
 inputDir="${INPUT_DIR:-/mnt/BioAdHoc/Groups/vd-ay/bbabatunde/projects/25-06-Kuchroo-Ay/yard/250818_HiCPro/results/hicpro/hic_results/matrix}"
 
 # Filename of the fithic call table, after the leading "<replicate>.".

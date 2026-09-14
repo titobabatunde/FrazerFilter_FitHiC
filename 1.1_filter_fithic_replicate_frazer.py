@@ -102,6 +102,34 @@ def load_and_sort_fithic_data(file_path, fdr_threshold, chromosome, verbose=Fals
     return df.copy(), significant_df.copy()
 # end def
 
+def count_significant_pairs(df, fixed_mid, other_mids, qvalue_threshold):
+    """Count significant interactions between one fixed anchor and a set of bins.
+
+    Counts rows pairing `fixed_mid` with any position in `other_mids` whose
+    q-value is below threshold.
+
+    Both storage orientations are matched. A fithic table records each pair once,
+    conventionally with fragmentMid1 <= fragmentMid2, so a neighbour bin lying on
+    the far side of the fixed anchor appears with the columns swapped. Checking
+    only fragmentMid1 == fixed_mid would silently miss those, which matters for
+    short-range loops where the opposing anchor's flanking bins can straddle this
+    one.
+
+    Args:
+        df: full (chromosome-subset) fithic DataFrame
+        fixed_mid: fragmentMid of the anchor being held fixed
+        other_mids: iterable of fragmentMid positions to look for
+        qvalue_threshold: significance threshold
+    Returns:
+        Number of significant interactions found.
+    """
+    mask = (
+        ((df['fragmentMid1'] == fixed_mid) & (df['fragmentMid2'].isin(other_mids)))
+        | ((df['fragmentMid2'] == fixed_mid) & (df['fragmentMid1'].isin(other_mids)))
+    )
+    return int((df.loc[mask, 'q-value'].astype(float) < qvalue_threshold).sum())
+# end def
+
 def filter_by_neighbor_significance(significant_df, df_sorted, resolution, qvalue_threshold, min_neighbors, max_neighbors, verbose=False):
     """
     Filter significant interactions by checking if neighbors around each opposing anchor are significant.
@@ -155,12 +183,15 @@ def filter_by_neighbor_significance(significant_df, df_sorted, resolution, qvalu
         downstream = [midB + i * resolution for i in range(1, max_neighbors + 1)]
         
         # Count significant upstream neighbors for anchor A (A ↔ B-1, A ↔ B-2, ...)
-        upstream_df_A = df_sorted[(df_sorted['chr1'] == chrA) & (df_sorted['fragmentMid2'].isin(upstream))]
-        upstream_count_A = (upstream_df_A['q-value'].astype(float) < qvalue_threshold).sum()
-        
+        # NOTE: anchor A is pinned by POSITION here. This previously matched on
+        # `chr1 == chrA`, which is true for every row once the table has been
+        # subset to one chromosome -- so it counted interactions from any anchor
+        # landing near B, not A's own. Isolated loops passed on the strength of
+        # unrelated anchors' neighbourhoods.
+        upstream_count_A = count_significant_pairs(df_sorted, midA, upstream, qvalue_threshold)
+
         # Count significant downstream neighbors for anchor A (A ↔ B+1, A ↔ B+2, ...)
-        downstream_df_A = df_sorted[(df_sorted['chr1'] == chrA) & (df_sorted['fragmentMid2'].isin(downstream))]
-        downstream_count_A = (downstream_df_A['q-value'].astype(float) < qvalue_threshold).sum()
+        downstream_count_A = count_significant_pairs(df_sorted, midA, downstream, qvalue_threshold)
 
         # Anchor A passes if it has enough significant neighbors in either direction
         anchorA_pass = upstream_count_A >= min_neighbors or downstream_count_A >= min_neighbors
@@ -171,12 +202,11 @@ def filter_by_neighbor_significance(significant_df, df_sorted, resolution, qvalu
         downstream_A = [midA + i * resolution for i in range(1, max_neighbors + 1)]
 
         # Count significant upstream neighbors for anchor B (A-1 ↔ B, A-2 ↔ B, ...)
-        upstream_df_B = df_sorted[(df_sorted['chr2'] == chrB) & (df_sorted['fragmentMid1'].isin(upstream_A))]
-        upstream_count_B = (upstream_df_B['q-value'].astype(float) < qvalue_threshold).sum()
-        
+        # Anchor B pinned by position, same correction as for A above.
+        upstream_count_B = count_significant_pairs(df_sorted, midB, upstream_A, qvalue_threshold)
+
         # Count significant downstream neighbors for anchor B (A+1 ↔ B, A+2 ↔ B, ...)
-        downstream_df_B = df_sorted[(df_sorted['chr2'] == chrB) & (df_sorted['fragmentMid1'].isin(downstream_A))]
-        downstream_count_B = (downstream_df_B['q-value'].astype(float) < qvalue_threshold).sum()
+        downstream_count_B = count_significant_pairs(df_sorted, midB, downstream_A, qvalue_threshold)
 
         # Anchor B passes if it has enough significant neighbors in either direction
         anchorB_pass = upstream_count_B >= min_neighbors or downstream_count_B >= min_neighbors
@@ -186,9 +216,11 @@ def filter_by_neighbor_significance(significant_df, df_sorted, resolution, qvalu
         significant_neighbors.append(passes_filter)
         
         if verbose:
-            total_neighbors = max_neighbors # upstream or downstream
-            print(f"  {chrA}:{midA} ↔ {chrB}:{midB}: A={upstream_count_A}/{total_neighbors} B={upstream_count_B}/{total_neighbors} → {'PASS' if passes_filter else 'FAIL'}")
-            print(f"  {chrA}:{midA} ↔ {chrB}:{midB}: A={downstream_count_A}/{total_neighbors} B={downstream_count_B}/{total_neighbors} → {'PASS' if passes_filter else 'FAIL'}")
+            n = max_neighbors  # bins checked per direction
+            print(f"  {chrA}:{midA} ↔ {chrB}:{midB}: "
+                  f"A up={upstream_count_A}/{n} down={downstream_count_A}/{n} | "
+                  f"B up={upstream_count_B}/{n} down={downstream_count_B}/{n} "
+                  f"→ {'PASS' if passes_filter else 'FAIL'}")
     # end for
     filtered_df = significant_df[significant_neighbors]
     
