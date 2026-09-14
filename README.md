@@ -111,7 +111,7 @@ required ones must be changed for your own data.
 - `RESULTS_DIR`: Output root (default: `$PWD/results`)
 - `ENV_NAME`: Environment the generated jobs activate (default: `frazerTB`)
 - `RESOLUTION`: Resolution in base pairs (default: 10000)
-- `FDR_THRESHOLD`: q-value threshold for significance (default: 0.0001)
+- `FDR_THRESHOLD`: q-value threshold for significance (default: 0.01, the paper's value)
 - `MIN_NEIGHBORS` / `TOTAL_NEIGHBORS`: Filter stringency (default: 3 of 5)
 - `WORKING_DIR`: Directory containing the `.py` file (default: `$PWD`)
 
@@ -122,7 +122,7 @@ python3 1.1_filter_fithic_replicate_frazer.py \
     --input_file rep1.significances.txt \
     --replicate_name rep1 \
     --chromosome chr1 \
-    --fdr_threshold 0.0001 \
+    --fdr_threshold 0.01 \
     --resolution 10000 \
     --output_dir /path/to/output \
     --verbose
@@ -138,7 +138,7 @@ python3 1.1_filter_fithic_replicate_frazer.py \
 
 **Optional:**
 - `--chromosome`: Chromosome to process (default: `chr1`)
-- `--fdr_threshold`: q-value threshold for significance (default: 0.0001)
+- `--fdr_threshold`: q-value threshold for significance (default: 0.01, the paper's value)
 - `--min_neighbors`: Minimum number of significant neighbours required (default: 3)
 - `--total_neighbors`: Total number of neighbours to check (default: 5)
 - `--verbose`: Enable verbose output
@@ -178,7 +178,7 @@ each chromosome, so a naive concatenation would repeat ids. Step 2 renumbers the
 - `CELL_TYPES`: Conditions to concatenate (default: the same list as step 1)
 - `CHROMS`: Chromosomes, in output order (default: `chr1` through `chr19`)
 - `RESULTS_DIR`: Output root; must match what step 1 used (default: `$PWD/results`)
-- `FDR_THRESHOLD`: Must match step 1, since it is part of the filenames (default: 0.0001)
+- `FDR_THRESHOLD`: Must match step 1, since it is part of the filenames (default: 0.01)
 - `FORCE`: Overwrite existing concatenated files (default: 0)
 - `WORKING_DIR`: This repo (default: `$PWD`)
 
@@ -234,7 +234,7 @@ mamba activate frazerTB
 bash 1.1_filter_fithic_replicates_frazer.sh
 
 # 3. Submit jobs
-cd qshs/{date}_filter_fithic_frazer_replicate_fdr0.0001/
+cd qshs/{date}_filter_fithic_frazer_replicate_fdr0.01/
 sbatch filter_frazer_{condition}_{replicate}_chr1.sh
 sbatch filter_frazer_{condition}_{replicate}_chr2.sh
 # ... etc, one per replicate x chromosome

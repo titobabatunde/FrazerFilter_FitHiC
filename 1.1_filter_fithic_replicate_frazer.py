@@ -3,7 +3,7 @@
 Filter individual Fit-Hi-C loop replicate files by FDR threshold and neighboring bin criteria.
 
 This script:
-1. Filters each replicate file by FDR threshold (default 0.0001)
+1. Filters each replicate file by FDR threshold (default 0.01, as in Greenwald et al. 2019)
 2. Filters each replicate by requiring significant interactions with neighbors around opposing anchors (Frazer filtering)
 3. Outputs filtered files for each replicate independently
 """
@@ -30,8 +30,8 @@ def parse_arguments():
                        help='Chromosome (default: chr1)')
     parser.add_argument('--fdr_threshold', 
                        type=float,
-                       default=0.0001,
-                       help='FDR threshold for significance (default: 0.0001)')
+                       default=0.01,
+                       help='q-value threshold for significance (default: 0.01, the value used in Greenwald et al. 2019)')
     parser.add_argument('--min_neighbors', 
                        type=int,
                        default=3,

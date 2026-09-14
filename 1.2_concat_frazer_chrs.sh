@@ -56,7 +56,7 @@ resultsRoot="${RESULTS_DIR:-$(pwd)/results}"
 # This repo. Defaults to the directory you run from.
 workingDir="${WORKING_DIR:-$(pwd)}"
 
-fdr="${FDR_THRESHOLD:-0.0001}"
+fdr="${FDR_THRESHOLD:-0.01}"
 
 # Set FORCE=1 to overwrite existing concatenated files instead of skipping.
 FORCE="${FORCE:-0}"

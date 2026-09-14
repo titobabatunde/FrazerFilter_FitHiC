@@ -61,7 +61,7 @@ workingDir="${WORKING_DIR:-$(pwd)}"
 envName="${ENV_NAME:-frazerTB}"
 
 resolution="${RESOLUTION:-10000}"
-fdr="${FDR_THRESHOLD:-0.0001}"
+fdr="${FDR_THRESHOLD:-0.01}"
 
 # Frazer filter parameters: an interaction is kept only if BOTH anchors have at
 # least minNeighbors significant partners among the totalNeighbors bins
